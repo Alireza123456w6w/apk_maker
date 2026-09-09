@@ -1,0 +1,17 @@
+{
+  "name": "دموی احراز هویت با چهره — W6W",
+  "short_name": "FaceAuth W6W",
+  "description": "سیستم تشخیص چهره و حضور و غیاب — نسخه 1.0.0-beta — سازنده W6W",
+  "start_url": "./face-auth-demo.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0D1013",
+  "theme_color": "#0D1013",
+  "lang": "fa",
+  "dir": "rtl",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
