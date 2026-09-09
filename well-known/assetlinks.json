@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "app.w6w.faceauth",
+        "sha256_cert_fingerprints": ["39:8B:76:4A:E0:23:CE:3B:22:D3:54:87:DB:A7:6F:8F:16:89:50:F5:00:D9:86:F4:A0:FD:21:DB:29:C9:99:66"]
+      }
+    }]
