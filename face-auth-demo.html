@@ -45,7 +45,7 @@
   --mono:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",Menlo,monospace;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-html{scrollbar-width:none;}
+html{scrollbar-width:none;overscroll-behavior:none;overscroll-behavior-y:none;}
 html::-webkit-scrollbar,body::-webkit-scrollbar,.page::-webkit-scrollbar,*::-webkit-scrollbar{width:0;height:0;display:none;}
 html,body{margin:0;padding:0;}
 body{
@@ -59,6 +59,7 @@ body{
   -webkit-touch-callout:none;
   user-select:none;
   -webkit-user-select:none;
+  overscroll-behavior:none;
   overscroll-behavior-y:none;
 }
 input,textarea{user-select:text;-webkit-user-select:text;}
@@ -900,11 +901,77 @@ let devicesPopulated = false;
 // ====== ناوبری تب‌ها (مثل اپ واقعی) ======
 const PAGE_TITLES = { home:'FaceAuth', people:'افراد', attendance:'حضور و غیاب', account:'حساب و تنظیمات' };
 
+let currentTab = 'home';
+
 function goTo(name){
+  currentTab = name;
   document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active', p.dataset.page===name));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active', n.dataset.page===name));
   appbarTitle.textContent = PAGE_TITLES[name] || 'FaceAuth';
-  window.scrollTo({top:0, behavior:'instant' in window ? 'instant' : 'auto'});
+  window.scrollTo(0,0);
+  saveState();
+}
+
+// ====== ماندگاری وضعیت اپ (تنظیمات، تب فعال، گزارش) ======
+// اگر WebView صفحه را رفرش کند (مثلاً pull-to-refresh)، هیچ‌چیز ریست نمی‌شود؛
+// اپ دقیقاً با همان تب و همان تنظیمات قبلی بالا می‌آید — مثل اپ واقعی.
+const UI_STATE_KEY = 'faceauth_ui_state_v1';
+const LOG_KEY = 'faceauth_log_v1';
+
+function saveState(){
+  try{
+    localStorage.setItem(UI_STATE_KEY, JSON.stringify({
+      threshold: threshold,
+      liveness: livenessRequired,
+      autoVerify: autoVerifyEnabled,
+      autoHold: autoHoldSeconds,
+      tab: currentTab
+    }));
+  }catch(e){}
+}
+
+function restoreState(){
+  let s = null;
+  try{ s = JSON.parse(localStorage.getItem(UI_STATE_KEY) || 'null'); }catch(e){}
+  if(s){
+    if(typeof s.threshold === 'number' && s.threshold >= 0.30 && s.threshold <= 0.70){
+      threshold = s.threshold;
+      thresholdInput.value = String(s.threshold);
+      threshVal.textContent = threshold.toFixed(2);
+      paintRange(thresholdInput);
+    }
+    if(typeof s.autoHold === 'number' && s.autoHold >= 1 && s.autoHold <= 8){
+      autoHoldSeconds = s.autoHold;
+      autoHoldInput.value = String(s.autoHold);
+      autoHoldVal.textContent = autoHoldSeconds.toFixed(1) + ' ثانیه';
+      paintRange(autoHoldInput);
+    }
+    if(typeof s.liveness === 'boolean'){
+      livenessRequired = s.liveness;
+      livenessToggle.checked = s.liveness;
+    }
+    if(typeof s.autoVerify === 'boolean'){
+      autoVerifyEnabled = s.autoVerify;
+      autoVerifyToggle.checked = s.autoVerify;
+      autoProgressWrap.style.display = s.autoVerify ? 'block' : 'none';
+      autoHoldRow.style.display = s.autoVerify ? 'block' : 'none';
+    }
+    if(typeof s.tab === 'string' && PAGE_TITLES[s.tab]) goTo(s.tab);
+  }
+  // بازیابی گزارش تلاش‌ها
+  try{
+    const rows = JSON.parse(localStorage.getItem(LOG_KEY) || 'null');
+    if(Array.isArray(rows) && rows.length && !logEl.children.length){
+      logEl.innerHTML = rows.join('');
+    }
+  }catch(e){}
+}
+
+function persistLog(){
+  try{
+    const rows = Array.from(logEl.querySelectorAll('.log-row')).slice(0,30).map(r=>r.outerHTML);
+    localStorage.setItem(LOG_KEY, JSON.stringify(rows));
+  }catch(e){}
 }
 
 document.querySelectorAll('.nav-item').forEach(n=>{
@@ -1023,6 +1090,7 @@ function logAttempt(accepted, distance, liveOk, name){
   const namePart = name ? escapeHtml(name) + ' · ' : '';
   row.innerHTML = `<span class="ldot"></span><span class="ltime">${time}</span><span class="lmain">${namePart}فاصله ${distance.toFixed(3)} · زنده: ${liveText}</span><span class="lbadge">${accepted?'موفق':'رد شد'}</span>`;
   logEl.prepend(row);
+  persistLog();
 }
 
 function todayISODate(){
@@ -1694,6 +1762,7 @@ async function resetAll(){
     distVal.textContent = '—';
     matchVal.textContent = '—';
     logEl.innerHTML = '';
+    try{ localStorage.removeItem(LOG_KEY); }catch(e){}
     setStatus('همهٔ چهره‌های ثبت‌شدهٔ حساب شما پاک شدند.', 'ok');
   }catch(err){
     setStatus('پاک‌کردن با خطا مواجه شد: ' + err.message, 'bad');
@@ -1748,6 +1817,7 @@ thresholdInput.addEventListener('input', e=>{
   threshold = parseFloat(e.target.value);
   threshVal.textContent = threshold.toFixed(2);
   paintRange(e.target);
+  saveState();
 });
 
 livenessToggle.addEventListener('change', e=>{
@@ -1756,6 +1826,7 @@ livenessToggle.addEventListener('change', e=>{
     livenessRequired ? 'تأیید پلک‌زدن فعال شد.' : 'تأیید پلک‌زدن غیرفعال شد — احراز هویت فقط بر اساس تطابق چهره انجام می‌شود.',
     livenessRequired ? 'ok' : 'bad'
   );
+  saveState();
 });
 
 autoVerifyToggle.addEventListener('change', e=>{
@@ -1769,12 +1840,14 @@ autoVerifyToggle.addEventListener('change', e=>{
     autoVerifyEnabled ? 'تأیید خودکار فعال شد.' : 'تأیید خودکار غیرفعال شد.',
     autoVerifyEnabled ? 'ok' : 'bad'
   );
+  saveState();
 });
 
 autoHoldInput.addEventListener('input', e=>{
   autoHoldSeconds = parseFloat(e.target.value);
   autoHoldVal.textContent = autoHoldSeconds.toFixed(1) + ' ثانیه';
   paintRange(e.target);
+  saveState();
 });
 
 cameraSelect.addEventListener('change', async e=>{
@@ -1815,6 +1888,7 @@ document.getElementById('su-email').addEventListener('keydown', e=>{ if(e.key===
 // ====== راه‌اندازی ======
 paintRange(thresholdInput);
 paintRange(autoHoldInput);
+restoreState();
 warnIfRestrictedScheme();
 loadModels();
 checkSession();
